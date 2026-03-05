@@ -46,7 +46,7 @@ const Index = () => {
               ].map((p) => (
                 <button
                   key={p.part}
-                  onClick={() => navigate(`/speaking/part${p.part}`)}
+                  onClick={() => navigate(`/speaking/part/${p.part}`)}
                   className="flex items-center justify-between p-3 rounded-lg bg-muted/50 w-full text-left hover:bg-muted transition-colors group"
                 >
                   <div className="flex items-center gap-3">
@@ -60,7 +60,7 @@ const Index = () => {
             </div>
           </div>
 
-          <Button size="lg" className="text-lg px-10 py-6 rounded-xl font-bold" onClick={() => navigate("/speaking/part1")}>
+          <Button size="lg" className="text-lg px-10 py-6 rounded-xl font-bold" onClick={() => navigate("/speaking/part/1")}>
             Start Speaking Test
             <ChevronRight className="ml-2 h-5 w-5" />
           </Button>
