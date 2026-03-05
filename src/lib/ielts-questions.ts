@@ -33,3 +33,10 @@ export function getRandomQuestion(part: 1 | 2 | 3): IELTSQuestion {
   const pool = part === 1 ? part1Questions : part === 2 ? part2Questions : part3Questions;
   return pool[Math.floor(Math.random() * pool.length)];
 }
+
+/** Get N unique random questions for a given part */
+export function getRandomQuestions(part: 1 | 2 | 3, count: number): IELTSQuestion[] {
+  const pool = part === 1 ? part1Questions : part === 2 ? part2Questions : part3Questions;
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, Math.min(count, shuffled.length));
+}
