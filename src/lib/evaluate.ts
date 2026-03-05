@@ -1,4 +1,4 @@
-const EVALUATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evaluate`;
+const EVALUATE_URL = `${import.meta.env.VITE_SUPABASE_URL || "http://127.0.0.1:8000"}/functions/v1/evaluate`;
 
 export interface EvaluationResult {
   transcript: string;
@@ -14,6 +14,30 @@ export interface EvaluationResult {
     emotion_feedback?: string;
     error?: string;
   };
+}
+
+async function pollJobResult(jobId: string, maxAttempts: number = 30): Promise<EvaluationResult> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await fetch(`${EVALUATE_URL}/${jobId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+    });
+
+    if (res.status === 200) {
+      return res.json();
+    } else if (res.status === 202) {
+      // Still processing, wait and retry
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      continue;
+    } else {
+      const err = await res.json().catch(() => ({ error: "Network error" }));
+      throw new Error(err.error || "Job polling failed");
+    }
+  }
+
+  throw new Error("Evaluation timed out after 30 seconds");
 }
 
 export async function evaluateAnswer({
@@ -51,6 +75,14 @@ export async function evaluateAnswer({
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Network error" }));
     throw new Error(err.error || "Evaluation failed");
+  }
+
+  // Check if we got a 202 (async job) response
+  if (res.status === 202) {
+    const data = await res.json();
+    if (data.job_id) {
+      return pollJobResult(data.job_id);
+    }
   }
 
   return res.json();

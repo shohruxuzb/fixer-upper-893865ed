@@ -48,18 +48,39 @@ export default function SpeakingPart() {
       const evalResults: EvaluationResult[] = [];
       for (let i = 0; i < questions.length; i++) {
         const a = answers[i];
-        const res = await evaluateAnswer({
-          question: questions[i].question,
-          audioBlob: inputMode === "voice" ? a?.audioBlob : null,
-          videoBlob: inputMode === "voice" ? a?.videoBlob : null,
-          manualText: inputMode === "text" ? a?.text : undefined,
-        });
-        evalResults.push(res);
+        try {
+          const res = await evaluateAnswer({
+            question: questions[i].question,
+            audioBlob: inputMode === "voice" ? a?.audioBlob : null,
+            videoBlob: inputMode === "voice" ? a?.videoBlob : null,
+            manualText: inputMode === "text" ? a?.text : undefined,
+          });
+          evalResults.push(res);
+        } catch (innerErr) {
+          console.error(`Question ${i + 1} evaluation failed:`, innerErr);
+          toast.error(`Question ${i + 1} evaluation failed — skipping`);
+          // Push placeholder so loop continues
+          evalResults.push({ 
+            transcript: "", 
+            evaluation: { 
+              overall_band: "N/A",
+              fluency: "N/A",
+              vocabulary: "N/A",
+              grammar: "N/A",
+              pronunciation: "N/A",
+              strengths: [],
+              weaknesses: ["Evaluation failed"],
+              error: "Evaluation could not complete",
+            } 
+          } as any);
+        }
       }
       setResults(evalResults);
-      setShowResults(true);
+      setShowResults(true); // Always show results even if some failed
     } catch (err: any) {
       toast.error(err.message || "Evaluation failed");
+      // Still navigate so user isn't stuck
+      setShowResults(true);
     } finally {
       setIsEvaluating(false);
     }
