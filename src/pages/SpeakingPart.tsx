@@ -172,7 +172,7 @@ export default function SpeakingPart() {
             ))}
             <div className="flex justify-center gap-3 pt-4">
               {nextPart && (
-                <Button size="lg" onClick={() => navigate(`/speaking/part${nextPart}`)} className="rounded-xl font-bold">
+                <Button size="lg" onClick={() => navigate(`/speaking/part/${nextPart}`)} className="rounded-xl font-bold">
                   Continue to Part {nextPart}
                   <ChevronRight className="ml-2 h-5 w-5" />
                 </Button>
