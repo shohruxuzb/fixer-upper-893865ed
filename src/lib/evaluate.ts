@@ -3,13 +3,15 @@ const EVALUATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evaluate
 export interface EvaluationResult {
   transcript: string;
   evaluation: {
-    overall_band: string;
-    fluency: string;
-    vocabulary: string;
-    grammar: string;
-    pronunciation: string;
+    overall_band: number | string;
+    fluency: number | string;
+    vocabulary: number | string;
+    grammar: number | string;
+    pronunciation: number | string;
     strengths: string[];
     weaknesses: string[];
+    improved_answers?: string[];
+    emotion_feedback?: string;
     error?: string;
   };
 }
@@ -17,10 +19,12 @@ export interface EvaluationResult {
 export async function evaluateAnswer({
   question,
   audioBlob,
+  videoBlob,
   manualText,
 }: {
   question: string;
   audioBlob?: Blob | null;
+  videoBlob?: Blob | null;
   manualText?: string;
 }): Promise<EvaluationResult> {
   const formData = new FormData();
@@ -30,6 +34,10 @@ export async function evaluateAnswer({
     formData.append("manual_text", manualText);
   } else if (audioBlob) {
     formData.append("audio", audioBlob, "recording.webm");
+  }
+
+  if (videoBlob) {
+    formData.append("video", videoBlob, "video.webm");
   }
 
   const res = await fetch(EVALUATE_URL, {

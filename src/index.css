@@ -51,6 +51,10 @@ All colors MUST be HSL.
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
+    --gold: 40 90% 47%;
+    --gold-foreground: 0 0% 100%;
+    --navy: 214 50% 24%;
+    --navy-foreground: 0 0% 100%;
   }
 
   .dark {

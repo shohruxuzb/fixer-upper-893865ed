@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 interface BandScoreProps {
   label: string;
-  score: string;
+  score: string | number;
   size?: "sm" | "lg";
 }
 
@@ -13,7 +13,7 @@ function getBandColor(score: number) {
 }
 
 export function BandScore({ label, score, size = "sm" }: BandScoreProps) {
-  const numScore = parseFloat(score) || 0;
+  const numScore = typeof score === "number" ? score : parseFloat(score) || 0;
   const isLarge = size === "lg";
 
   return (
