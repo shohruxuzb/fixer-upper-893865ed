@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { IELTSQuestion } from "@/lib/ielts-questions";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +19,13 @@ export function QuestionCard({ question, index, onAnswered, inputMode }: Props) 
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
+  // Notify parent when audioBlob/videoBlob become available after recording stops
+  useEffect(() => {
+    if (audioBlob) {
+      onAnswered(index, { audioBlob, videoBlob });
+    }
+  }, [audioBlob, videoBlob]);
+
   const speakQuestion = () => {
     const utterance = new SpeechSynthesisUtterance(question.question);
     utterance.lang = "en-US";
@@ -28,10 +35,6 @@ export function QuestionCard({ question, index, onAnswered, inputMode }: Props) 
 
   const handleStopAndSave = () => {
     stopRecording();
-    // Use setTimeout to wait for blobs to be set via onstop callbacks
-    setTimeout(() => {
-      onAnswered(index, { audioBlob, videoBlob });
-    }, 300);
   };
 
   // Update parent when text changes
