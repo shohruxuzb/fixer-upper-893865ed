@@ -48,18 +48,37 @@ export default function SpeakingPart() {
       const evalResults: EvaluationResult[] = [];
       for (let i = 0; i < questions.length; i++) {
         const a = answers[i];
-        const res = await evaluateAnswer({
-          question: questions[i].question,
-          audioBlob: inputMode === "voice" ? a?.audioBlob : null,
-          videoBlob: inputMode === "voice" ? a?.videoBlob : null,
-          manualText: inputMode === "text" ? a?.text : undefined,
-        });
-        evalResults.push(res);
+        try {
+          const res = await evaluateAnswer({
+            question: questions[i].question,
+            audioBlob: inputMode === "voice" ? a?.audioBlob : null,
+            videoBlob: inputMode === "voice" ? a?.videoBlob : null,
+            manualText: inputMode === "text" ? a?.text : undefined,
+          });
+          evalResults.push(res);
+        } catch (innerErr: any) {
+          console.error(`Question ${i + 1} evaluation failed:`, innerErr);
+          toast.error(`Question ${i + 1} evaluation failed — skipping`);
+          evalResults.push({
+            transcript: answers[i]?.text || "(recording)",
+            evaluation: {
+              overall_band: "-",
+              fluency: "-",
+              vocabulary: "-",
+              grammar: "-",
+              pronunciation: "-",
+              strengths: [],
+              weaknesses: [],
+              error: innerErr?.message || "Evaluation failed",
+            },
+          });
+        }
       }
       setResults(evalResults);
       setShowResults(true);
     } catch (err: any) {
       toast.error(err.message || "Evaluation failed");
+      setShowResults(true);
     } finally {
       setIsEvaluating(false);
     }
