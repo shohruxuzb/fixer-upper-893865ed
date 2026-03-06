@@ -53,7 +53,8 @@ serve(async (req) => {
     // Transcribe audio via Groq Whisper if provided
     if (!transcript && audioBytes) {
       const form = new FormData();
-      const blob = new Blob([audioBytes], { type: "audio/wav" });
+      const mimeType = audioFilename.endsWith(".webm") ? "audio/webm" : "audio/wav";
+      const blob = new Blob([audioBytes], { type: mimeType });
       form.append("file", blob, audioFilename);
       form.append("model", "whisper-large-v3");
 
