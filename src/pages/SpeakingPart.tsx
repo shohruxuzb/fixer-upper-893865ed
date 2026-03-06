@@ -5,6 +5,7 @@ import { QuestionCard } from "@/components/QuestionCard";
 import { EvaluationCard } from "@/components/EvaluationCard";
 import { evaluateAnswer, EvaluationResult } from "@/lib/evaluate";
 import { getRandomQuestions, getRandomQuestion, IELTSQuestion } from "@/lib/ielts-questions";
+import { savePartResults } from "@/lib/results-store";
 import { Loader2, ChevronRight, BookOpen, Mic, Send, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
@@ -73,6 +74,7 @@ function SpeakingPartInner({ part }: { part: 1 | 2 | 3 }) {
         }
       }
       setResults(evalResults);
+      savePartResults(part, evalResults);
       setShowResults(true);
     } catch (err: any) {
       toast.error(err.message || "Evaluation failed");
@@ -188,9 +190,14 @@ function SpeakingPartInner({ part }: { part: 1 | 2 | 3 }) {
               </div>
             ))}
             <div className="flex justify-center gap-3 pt-4">
-              {nextPart && (
+              {nextPart ? (
                 <Button size="lg" onClick={() => navigate(`/speaking/part/${nextPart}`)} className="rounded-xl font-bold">
                   Continue to Part {nextPart}
+                  <ChevronRight className="ml-2 h-5 w-5" />
+                </Button>
+              ) : (
+                <Button size="lg" onClick={() => navigate("/results")} className="rounded-xl font-bold">
+                  View Overall Results
                   <ChevronRight className="ml-2 h-5 w-5" />
                 </Button>
               )}
