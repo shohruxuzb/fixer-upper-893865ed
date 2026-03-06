@@ -14,9 +14,7 @@ const PART_CONFIG: Record<number, { count: number; label: string }> = {
   3: { count: 3, label: "Two-way Discussion" },
 };
 
-export default function SpeakingPart() {
-  const { partNum } = useParams();
-  const part = (Number(partNum) || 1) as 1 | 2 | 3;
+function SpeakingPartInner({ part }: { part: 1 | 2 | 3 }) {
   const navigate = useNavigate();
   const config = PART_CONFIG[part] || PART_CONFIG[1];
 
@@ -205,4 +203,10 @@ export default function SpeakingPart() {
       </main>
     </div>
   );
+}
+
+export default function SpeakingPart() {
+  const { partNum } = useParams();
+  const part = (Number(partNum) || 1) as 1 | 2 | 3;
+  return <SpeakingPartInner key={part} part={part} />;
 }
