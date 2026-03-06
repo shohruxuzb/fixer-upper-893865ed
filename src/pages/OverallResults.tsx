@@ -3,7 +3,8 @@ import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { BandScore } from "@/components/BandScore";
 import { getAllPartResults, clearAllResults, PartResults } from "@/lib/results-store";
-import { BookOpen, ArrowLeft, Volume2, VolumeX, CheckCircle, AlertTriangle, RotateCcw } from "lucide-react";
+import { aggregateResults } from "@/lib/api";
+import { BookOpen, ArrowLeft, Volume2, VolumeX, CheckCircle, AlertTriangle, RotateCcw, Loader2 } from "lucide-react";
 
 function avg(nums: number[]): number {
   if (!nums.length) return 0;
@@ -20,6 +21,8 @@ export default function OverallResults() {
   const navigate = useNavigate();
   const [partResults, setPartResults] = useState<PartResults[]>([]);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [weightedBand, setWeightedBand] = useState<number | null>(null);
+  const [isAggregating, setIsAggregating] = useState(false);
 
   useEffect(() => {
     const results = getAllPartResults();
@@ -27,7 +30,22 @@ export default function OverallResults() {
       navigate("/");
       return;
     }
-    setPartResults(results.sort((a, b) => a.part - b.part));
+    const sortedResults = results.sort((a, b) => a.part - b.part);
+    setPartResults(sortedResults);
+
+    async function fetchAggregation() {
+      setIsAggregating(true);
+      try {
+        const evaluations = sortedResults.map(r => r.results[0].evaluation);
+        const agg = await aggregateResults(evaluations);
+        setWeightedBand(agg.weighted_band);
+      } catch (err) {
+        console.error("Aggregation failed", err);
+      } finally {
+        setIsAggregating(false);
+      }
+    }
+    fetchAggregation();
   }, [navigate]);
 
   // Collect all valid evaluations
@@ -35,7 +53,8 @@ export default function OverallResults() {
     pr.results.filter((r) => !r.evaluation.error)
   );
 
-  const overallBand = avg(allEvals.map((e) => parseScore(e.evaluation.overall_band)));
+  const overallBand = weightedBand ?? avg(allEvals.map((e) => parseScore(e.evaluation.overall_band)));
+
   const overallFluency = avg(allEvals.map((e) => parseScore(e.evaluation.fluency)));
   const overallVocabulary = avg(allEvals.map((e) => parseScore(e.evaluation.vocabulary)));
   const overallGrammar = avg(allEvals.map((e) => parseScore(e.evaluation.grammar)));

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { IELTSQuestion } from "@/lib/ielts-questions";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +12,7 @@ interface Props {
   inputMode: "voice" | "text";
 }
 
-export function QuestionCard({ question, index, onAnswered, inputMode }: Props) {
+export const QuestionCard: React.FC<Props> = ({ question, index, onAnswered, inputMode }) => {
   const { isRecording, audioBlob, videoBlob, duration, startRecording, stopRecording, clearRecording, videoPreviewRef } = useAudioRecorder();
   const [typedAnswer, setTypedAnswer] = useState("");
   const answered = inputMode === "voice" ? !!audioBlob : !!typedAnswer.trim();
