@@ -96,23 +96,33 @@ const SpeakingPartInner: React.FC<{ part: 1 | 2 | 3 }> = ({ part }) => {
   }, [isPreparing]);
 
   const [hasStarted, setHasStarted] = useState(false);
+  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const playQuestion = useCallback((text: string) => {
     if (!text || !hasStarted) return;
 
-    // Stop current speech
+    // Reset synthesis state
     window.speechSynthesis.cancel();
+    window.speechSynthesis.resume();
 
-    // Some browsers need a tiny pause between cancel and speak
     setTimeout(() => {
       const utterance = new SpeechSynthesisUtterance(text);
 
+      // Select best voice
       const voices = window.speechSynthesis.getVoices();
-      const englishVoice = voices.find(v => v.lang === 'en-GB' || v.lang === 'en-US')
-        || voices.find(v => v.lang.startsWith('en'));
+      const preferredVoices = ['en-GB', 'en-US', 'en-AU', 'en-IN'];
+      let voice = null;
 
-      if (englishVoice) utterance.voice = englishVoice;
-      utterance.rate = 0.95;
+      for (const lang of preferredVoices) {
+        voice = voices.find(v => v.lang.startsWith(lang));
+        if (voice) break;
+      }
+
+      if (!voice) voice = voices.find(v => v.lang.startsWith('en'));
+      if (voice) utterance.voice = voice;
+
+      utterance.rate = 0.9;
+      utterance.volume = 1;
 
       utterance.onstart = () => {
         setIsExaminerSpeaking(true);
@@ -120,25 +130,42 @@ const SpeakingPartInner: React.FC<{ part: 1 | 2 | 3 }> = ({ part }) => {
 
       utterance.onend = () => {
         setIsExaminerSpeaking(false);
+        currentUtteranceRef.current = null;
       };
 
       utterance.onerror = (event) => {
         console.error("SpeechSynthesis error:", event);
         setIsExaminerSpeaking(false);
+        currentUtteranceRef.current = null;
       };
 
+      // Keep a reference to prevent garbage collection on long sentences (Chromium bug)
+      currentUtteranceRef.current = utterance;
+
       window.speechSynthesis.speak(utterance);
-    }, 100);
+    }, 150);
   }, [hasStarted]);
+
+  // Load voices early
+  useEffect(() => {
+    window.speechSynthesis.getVoices();
+    const handleVoices = () => window.speechSynthesis.getVoices();
+    window.addEventListener('voiceschanged', handleVoices);
+    return () => window.removeEventListener('voiceschanged', handleVoices);
+  }, []);
 
   // Handle auto-play
   useEffect(() => {
     if (loading || !token || questions.length === 0 || !hasStarted) return;
     if (part === 2 && isPreparing) return;
 
-    // Trigger the voice
-    playQuestion(questions[currentQ]);
+    // Tiny delay to ensure UI transition is smooth
+    const t = setTimeout(() => {
+      playQuestion(questions[currentQ]);
+    }, 500);
+
     startEmotionTracking(token).catch(() => { });
+    return () => clearTimeout(t);
   }, [currentQ, loading, isPreparing, questions, token, part, playQuestion, hasStarted]);
 
   // When prep ends for part 2, play question
