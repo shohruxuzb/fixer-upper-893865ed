@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { BandScore } from "@/components/BandScore";
 import { getAllPartResults, clearAllResults, PartResults } from "@/lib/results-store";
 import { aggregateResults } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { BookOpen, ArrowLeft, Volume2, VolumeX, CheckCircle, AlertTriangle, RotateCcw, Loader2 } from "lucide-react";
 
 function avg(nums: number[]): number {
