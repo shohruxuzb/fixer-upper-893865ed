@@ -105,3 +105,30 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+@layer utilities {
+  .bg-premium-gradient {
+    @apply bg-gradient-to-br from-slate-900 via-indigo-900 to-black;
+  }
+  
+  .glass-morphism {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+  }
+
+  .text-glow {
+    text-shadow: 0 0 15px rgba(45, 212, 191, 0.5);
+  }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.card-hover {
+  @apply transition-all duration-300 hover:shadow-2xl hover:translate-y-[-4px] active:translate-y-0;
+}

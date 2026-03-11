@@ -23,7 +23,7 @@ export async function registerUser(username: string, password: string, email: st
 export async function loginUser(username: string, password: string) {
   const users = getMockDB();
   const user = users.find((u: any) => u.username === username && u.password === password);
-  
+
   if (!user) {
     throw new Error("Invalid username or password");
   }
@@ -44,12 +44,39 @@ export async function getMe(token: string) {
 // ---------- QUESTIONS ----------
 export async function fetchQuestions(part: number, token: string) {
   // Use mock questions for now since backend is down
-  const mockQuestions = {
-    1: ["Tell me about your hometown.", "What do you do in your free time?", "Do you like cooking?"],
-    2: ["Describe a book you recently read.", "Why did you choose this book?", "How long did it take to read?"],
-    3: ["How has reading habits changed in your country?", "Do you think physical books will disappear?", "What are the benefits of reading for children?"]
-  };
-  return (mockQuestions as any)[part] || [];
+  if (part === 1) {
+    return {
+      questions: [
+        "Tell me about your hometown.",
+        "What do you do in your free time?",
+        "Do you like cooking?",
+        "How often do you travel?"
+      ]
+    };
+  }
+  if (part === 2) {
+    return {
+      topic: "Describe a book you recently read.",
+      bullets: [
+        "What the book was about",
+        "Why you chose to read it",
+        "How long it took you to read",
+        "And explain why you liked or disliked it"
+      ],
+      instruction: "You should speak for 1-2 minutes."
+    };
+  }
+  if (part === 3) {
+    return {
+      questions: [
+        "How has reading habits changed in your country?",
+        "Do you think physical books will disappear?",
+        "What are the benefits of reading for children?",
+        "Do you think schools should encourage more reading?"
+      ]
+    };
+  }
+  return [];
 }
 
 // ---------- TTS ----------
