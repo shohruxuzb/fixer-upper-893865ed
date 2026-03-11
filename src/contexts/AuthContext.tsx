@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { loginUser, registerUser, getMe } from "@/lib/api";
 
 interface AuthState {
@@ -16,7 +16,14 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [auth, setAuth] = useState<AuthState>({ token: null, username: null });
+  const [auth, setAuth] = useState<AuthState>(() => {
+    const saved = localStorage.getItem("auth_session");
+    return saved ? JSON.parse(saved) : { token: null, username: null };
+  });
+
+  useEffect(() => {
+    localStorage.setItem("auth_session", JSON.stringify(auth));
+  }, [auth]);
 
   const login = useCallback(async (username: string, password: string) => {
     const data = await loginUser(username, password);
@@ -39,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   );
 }
+
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
