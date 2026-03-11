@@ -95,26 +95,28 @@ const SpeakingPartInner: React.FC<{ part: 1 | 2 | 3 }> = ({ part }) => {
     return () => clearInterval(t);
   }, [isPreparing]);
 
+  const [hasStarted, setHasStarted] = useState(false);
+
   const playQuestion = useCallback((text: string) => {
-    if (!text) return;
+    if (!text || !hasStarted) return;
 
-    setIsExaminerSpeaking(true);
-
-    // Use a small timeout to ensure any previous speech is fully cancelled
-    // and the browser is ready for the next utterance.
+    // Stop current speech
     window.speechSynthesis.cancel();
 
+    // Some browsers need a tiny pause between cancel and speak
     setTimeout(() => {
       const utterance = new SpeechSynthesisUtterance(text);
 
-      // Voices might take a moment to load
       const voices = window.speechSynthesis.getVoices();
       const englishVoice = voices.find(v => v.lang === 'en-GB' || v.lang === 'en-US')
         || voices.find(v => v.lang.startsWith('en'));
 
       if (englishVoice) utterance.voice = englishVoice;
       utterance.rate = 0.95;
-      utterance.pitch = 1;
+
+      utterance.onstart = () => {
+        setIsExaminerSpeaking(true);
+      };
 
       utterance.onend = () => {
         setIsExaminerSpeaking(false);
@@ -126,16 +128,18 @@ const SpeakingPartInner: React.FC<{ part: 1 | 2 | 3 }> = ({ part }) => {
       };
 
       window.speechSynthesis.speak(utterance);
-    }, 50);
-  }, []);
+    }, 100);
+  }, [hasStarted]);
 
-  // Play TTS when question changes and not preparing
+  // Handle auto-play
   useEffect(() => {
-    if (loading || !token || questions.length === 0) return;
+    if (loading || !token || questions.length === 0 || !hasStarted) return;
     if (part === 2 && isPreparing) return;
+
+    // Trigger the voice
     playQuestion(questions[currentQ]);
     startEmotionTracking(token).catch(() => { });
-  }, [currentQ, loading, isPreparing, questions, token, part, playQuestion]);
+  }, [currentQ, loading, isPreparing, questions, token, part, playQuestion, hasStarted]);
 
   // When prep ends for part 2, play question
   useEffect(() => {
@@ -143,6 +147,14 @@ const SpeakingPartInner: React.FC<{ part: 1 | 2 | 3 }> = ({ part }) => {
       playQuestion(questions[0]);
     }
   }, [isPreparing, loading, questions, part, playQuestion]);
+
+  const handleStart = () => {
+    setHasStarted(true);
+    // Unlocking SpeechSynthesis in browsers
+    window.speechSynthesis.cancel();
+    const unlock = new SpeechSynthesisUtterance("");
+    window.speechSynthesis.speak(unlock);
+  };
 
   const handleReplay = () => {
     if (questions[currentQ]) playQuestion(questions[currentQ]);
@@ -236,6 +248,30 @@ const SpeakingPartInner: React.FC<{ part: 1 | 2 | 3 }> = ({ part }) => {
         <Loader2 className="h-8 w-8 animate-spin text-teal-400" />
         <span className="font-medium text-xl">Evaluating your answers...</span>
         <span className="text-indigo-200">This may take a moment</span>
+      </div>
+    );
+  }
+
+  if (!hasStarted) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-premium-gradient text-white p-6 text-center">
+        <div className="max-w-md space-y-8 animate-in fade-in zoom-in duration-500">
+          <div className="bg-white/10 backdrop-blur-xl p-8 rounded-[3rem] border border-white/20 shadow-2xl">
+            <div className="w-24 h-24 bg-teal-400 rounded-full mx-auto mb-6 flex items-center justify-center shadow-[0_0_30px_rgba(45,212,191,0.5)]">
+              <Volume2 className="h-12 w-12 text-slate-900" />
+            </div>
+            <h1 className="text-3xl font-bold mb-4">Ready for Part {part}?</h1>
+            <p className="text-indigo-100 mb-8 leading-relaxed">
+              I will be your examiner today. Make sure your volume is turned up so you can hear my questions clearly.
+            </p>
+            <button
+              onClick={handleStart}
+              className="w-full py-4 bg-teal-400 hover:bg-teal-300 text-slate-900 font-bold rounded-2xl transition-all shadow-lg hover:scale-105 active:scale-95"
+            >
+              START INTERVIEW
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
