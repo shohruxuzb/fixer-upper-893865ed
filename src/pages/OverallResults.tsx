@@ -39,7 +39,7 @@ export default function OverallResults() {
       setIsAggregating(true);
       try {
         const evaluations = sortedResults.map(r => r.results[0].evaluation);
-        const agg = await aggregateResults(evaluations);
+        const agg = await aggregateResults(evaluations, token!);
         setWeightedBand(agg.weighted_band);
       } catch (err) {
         console.error("Aggregation failed", err);
