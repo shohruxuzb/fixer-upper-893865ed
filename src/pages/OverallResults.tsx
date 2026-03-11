@@ -20,6 +20,7 @@ function parseScore(s: string | number): number {
 
 export default function OverallResults() {
   const navigate = useNavigate();
+  const { token } = useAuth();
   const [partResults, setPartResults] = useState<PartResults[]>([]);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [weightedBand, setWeightedBand] = useState<number | null>(null);
