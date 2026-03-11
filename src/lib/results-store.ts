@@ -15,7 +15,11 @@ export function savePartResults(part: number, results: EvaluationResult[]) {
   } else {
     all.push({ part, results });
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  } catch {
+    // localStorage may not be available
+  }
 }
 
 export function getAllPartResults(): PartResults[] {
@@ -27,5 +31,7 @@ export function getAllPartResults(): PartResults[] {
 }
 
 export function clearAllResults() {
-  localStorage.removeItem(STORAGE_KEY);
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {}
 }

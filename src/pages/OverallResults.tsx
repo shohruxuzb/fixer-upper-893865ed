@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { BandScore } from "@/components/BandScore";
 import { getAllPartResults, clearAllResults, PartResults } from "@/lib/results-store";
 import { aggregateResults } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { BookOpen, ArrowLeft, Volume2, VolumeX, CheckCircle, AlertTriangle, RotateCcw, Loader2 } from "lucide-react";
 
 function avg(nums: number[]): number {
@@ -19,6 +20,7 @@ function parseScore(s: string | number): number {
 
 export default function OverallResults() {
   const navigate = useNavigate();
+  const { token } = useAuth();
   const [partResults, setPartResults] = useState<PartResults[]>([]);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [weightedBand, setWeightedBand] = useState<number | null>(null);
@@ -37,7 +39,7 @@ export default function OverallResults() {
       setIsAggregating(true);
       try {
         const evaluations = sortedResults.map(r => r.results[0].evaluation);
-        const agg = await aggregateResults(evaluations);
+        const agg = await aggregateResults(evaluations, token!);
         setWeightedBand(agg.weighted_band);
       } catch (err) {
         console.error("Aggregation failed", err);

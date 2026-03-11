@@ -54,7 +54,7 @@ serve(async (req) => {
     if (!transcript && audioBytes) {
       const form = new FormData();
       const mimeType = audioFilename.endsWith(".webm") ? "audio/webm" : "audio/wav";
-      const blob = new Blob([audioBytes], { type: mimeType });
+      const blob = new Blob([audioBytes.buffer], { type: mimeType });
       form.append("file", blob, audioFilename);
       form.append("model", "whisper-large-v3");
 
