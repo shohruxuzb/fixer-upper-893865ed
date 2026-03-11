@@ -1,229 +1,284 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { QuestionCard } from "@/components/QuestionCard";
-import { EvaluationCard } from "@/components/EvaluationCard";
-import { fetchQuestions, evaluatePart, startEmotionTracking, stopEmotionTracking } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { fetchQuestions, fetchTTSAudio, submitEvaluation, pollJobResult, startEmotionTracking, stopEmotionTracking } from "@/lib/api";
 import { savePartResults } from "@/lib/results-store";
-import { Loader2, ChevronRight, BookOpen, Mic, Send, ArrowLeft } from "lucide-react";
+import { TopBar } from "@/components/speaking/TopBar";
+import { BottomBar } from "@/components/speaking/BottomBar";
+import { ExaminerAnimation } from "@/components/speaking/ExaminerAnimation";
+import { CueCardDisplay } from "@/components/speaking/CueCardDisplay";
+import { Loader2, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 
-const PART_CONFIG: Record<number, { label: string }> = {
-  1: { label: "Introduction & Familiar Topics" },
-  2: { label: "Individual Long Turn (Cue Card)" },
-  3: { label: "Two-way Discussion" },
-};
+interface CueCard {
+  topic: string;
+  bullets: string[];
+  instruction: string;
+}
+
+const PREP_TIME = 60;
 
 const SpeakingPartInner: React.FC<{ part: 1 | 2 | 3 }> = ({ part }) => {
   const navigate = useNavigate();
-  const config = PART_CONFIG[part] || PART_CONFIG[1];
+  const { token } = useAuth();
 
+  // Questions state
   const [questions, setQuestions] = useState<string[]>([]);
-  const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
-  const [answers, setAnswers] = useState<Record<number, { audioBlob?: Blob | null; videoBlob?: Blob | null; text?: string }>>({});
-  const [inputMode, setInputMode] = useState<"voice" | "text">("voice");
-  const [isEvaluating, setIsEvaluating] = useState(false);
-  const [results, setResults] = useState<any>(null);
-  const [showResults, setShowResults] = useState(false);
+  const [cueCard, setCueCard] = useState<CueCard | null>(null);
+  const [currentQ, setCurrentQ] = useState(0);
+  const [loading, setLoading] = useState(true);
 
+  // Interaction state
+  const [isExaminerSpeaking, setIsExaminerSpeaking] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [hasRecorded, setHasRecorded] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [prepTimeLeft, setPrepTimeLeft] = useState(PREP_TIME);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+
+  // Recorded data
+  const answersRef = useRef<{ text: string; audioBlob: Blob | null }[]>([]);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Global timer
   useEffect(() => {
-    async function loadQuestions() {
-      setIsLoadingQuestions(true);
+    const t = setInterval(() => setElapsedTime((e) => e + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Load questions
+  useEffect(() => {
+    if (!token) return;
+    (async () => {
+      setLoading(true);
       try {
-        const data = await fetchQuestions(part);
-        const qs = Array.isArray(data.questions)
-          ? data.questions
-          : [(data as any).question];
-        setQuestions(qs);
-      } catch (err) {
-        toast.error("Failed to load questions from backend");
+        const data = await fetchQuestions(part, token);
+        if (part === 2) {
+          setCueCard({ topic: data.topic, bullets: data.bullets, instruction: data.instruction });
+          setQuestions([data.topic]);
+          setIsPreparing(true);
+          setPrepTimeLeft(PREP_TIME);
+        } else {
+          const qs = Array.isArray(data.questions) ? data.questions : [data.question];
+          setQuestions(qs);
+        }
+      } catch (err: any) {
+        toast.error(err.message || "Failed to load questions");
       } finally {
-        setIsLoadingQuestions(false);
+        setLoading(false);
+      }
+    })();
+  }, [part, token]);
+
+  // Prep timer
+  useEffect(() => {
+    if (!isPreparing) return;
+    const t = setInterval(() => {
+      setPrepTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(t);
+          setIsPreparing(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [isPreparing]);
+
+  // Play TTS when question changes and not preparing
+  useEffect(() => {
+    if (loading || !token || questions.length === 0) return;
+    if (part === 2 && isPreparing) return;
+    playQuestion(questions[currentQ]);
+    startEmotionTracking(token).catch(() => {});
+  }, [currentQ, loading, isPreparing]);
+
+  // When prep ends for part 2, play question
+  useEffect(() => {
+    if (part === 2 && !isPreparing && !loading && questions.length > 0) {
+      playQuestion(questions[0]);
+    }
+  }, [isPreparing]);
+
+  const playQuestion = useCallback(async (text: string) => {
+    if (!token) return;
+    setIsExaminerSpeaking(true);
+    try {
+      const blob = await fetchTTSAudio(text, token);
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        setIsExaminerSpeaking(false);
+        URL.revokeObjectURL(url);
+      };
+      audio.onerror = () => setIsExaminerSpeaking(false);
+      await audio.play();
+    } catch {
+      setIsExaminerSpeaking(false);
+    }
+  }, [token]);
+
+  const handleReplay = () => {
+    if (questions[currentQ]) playQuestion(questions[currentQ]);
+  };
+
+  // Recording
+  const handleRecord = useCallback(async () => {
+    if (isRecording) {
+      // Stop
+      mediaRecorderRef.current?.stop();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      if (recTimerRef.current) clearInterval(recTimerRef.current);
+      setIsRecording(false);
+      setHasRecorded(true);
+
+      stopEmotionTracking(questions[currentQ], part, token!).catch(() => {});
+    } else {
+      // Start
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+        const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+        audioChunksRef.current = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        };
+        recorder.onstop = () => {
+          const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          // Store answer
+          while (answersRef.current.length <= currentQ) answersRef.current.push({ text: "", audioBlob: null });
+          answersRef.current[currentQ] = { text: "", audioBlob: blob };
+        };
+        mediaRecorderRef.current = recorder;
+        recorder.start();
+        setIsRecording(true);
+        setRecordingDuration(0);
+        recTimerRef.current = setInterval(() => setRecordingDuration((d) => d + 1), 1000);
+      } catch {
+        toast.error("Microphone access denied");
       }
     }
-    loadQuestions();
-  }, [part]);
+  }, [isRecording, currentQ, questions, part, token]);
 
-  const allAnswered = useMemo(() => {
-    if (questions.length === 0) return false;
-    return questions.every((_, i) => {
-      const a = answers[i];
-      if (!a) return false;
-      return inputMode === "voice" ? !!a.audioBlob : !!a.text?.trim();
-    });
-  }, [answers, questions, inputMode]);
+  // Next question
+  const handleNext = useCallback(async () => {
+    if (currentQ + 1 < questions.length) {
+      setCurrentQ((q) => q + 1);
+      setHasRecorded(false);
+      setRecordingDuration(0);
+    } else {
+      // Submit all answers for evaluation
+      setIsEvaluating(true);
+      try {
+        const qs = questions;
+        const ansStrings = qs.map((_, i) => answersRef.current[i]?.text || "");
+        const audios = qs.map((_, i) => answersRef.current[i]?.audioBlob || null);
 
-  const handleAnswered = (index: number, data: { audioBlob?: Blob | null; videoBlob?: Blob | null; text?: string }) => {
-    setAnswers((prev) => ({ ...prev, [index]: data }));
+        const jobId = await submitEvaluation(qs, ansStrings, part, token!, audios);
+        const result = await pollJobResult(jobId, token!);
 
-    // Fire and forget emotion tracking calls
-    stopEmotionTracking(questions[index], part).catch(err =>
-      console.warn("Emotion tracking stop failed", err)
-    );
+        savePartResults(part, [{
+          transcript: ansStrings.filter(Boolean).join(" | ") || "Audio response",
+          evaluation: result,
+        }]);
 
-    if (index + 1 < questions.length) {
-      startEmotionTracking().catch(err =>
-        console.warn("Emotion tracking start failed", err)
-      );
+        if (part < 3) {
+          navigate(`/speaking/part/${part + 1}`);
+        } else {
+          navigate("/results");
+        }
+      } catch (err: any) {
+        toast.error(err.message || "Evaluation failed");
+      } finally {
+        setIsEvaluating(false);
+      }
     }
+  }, [currentQ, questions, part, token, navigate]);
+
+  const handleSkipPrep = () => {
+    setIsPreparing(false);
+    setPrepTimeLeft(0);
   };
 
-  useEffect(() => {
-    if (questions.length > 0) {
-      startEmotionTracking().catch(err => console.warn("Initial emotion tracking failed", err));
-    }
-  }, [questions]);
+  if (!token) {
+    navigate("/login");
+    return null;
+  }
 
-  const handleSubmit = async () => {
-    setIsEvaluating(true);
-    try {
-      const qs = questions;
-      const ansStrings = qs.map((_, i) => answers[i]?.text || "");
-      const audios = qs.map((_, i) => answers[i]?.audioBlob || null);
-
-      const res = await evaluatePart(qs, ansStrings, audios);
-
-      setResults(res.evaluation);
-      savePartResults(part, [{
-        transcript: ansStrings.filter(Boolean).join(" | ") || "Audio response",
-        evaluation: res.evaluation
-      }]);
-      setShowResults(true);
-    } catch (err: any) {
-      toast.error(err.message || "Evaluation failed");
-    } finally {
-      setIsEvaluating(false);
-    }
-  };
-
-  const nextPart = part < 3 ? part + 1 : null;
-
-  if (isLoadingQuestions) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center bg-[hsl(0,0%,100%)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2 font-medium">Generating questions...</span>
+        <span className="ml-3 font-medium text-foreground">Generating questions...</span>
+      </div>
+    );
+  }
+
+  if (isEvaluating) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-[hsl(0,0%,100%)] gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="font-medium text-foreground">Evaluating your answers...</span>
+        <span className="text-sm text-muted-foreground">This may take a moment</span>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card/80 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-5 w-5 text-primary" />
-            <span className="font-bold text-foreground">IELTS Speaking AI</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {[1, 2, 3].map((p) => (
-              <span
-                key={p}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${p === part ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                  }`}
-              >
-                Part {p}
-              </span>
-            ))}
-          </div>
-        </div>
-      </header>
+    <div className="h-screen flex flex-col bg-[hsl(0,0%,100%)]">
+      <TopBar
+        questionNumber={currentQ + 1}
+        totalQuestions={questions.length}
+        elapsedTime={elapsedTime}
+        onClose={() => navigate("/")}
+      />
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-foreground">Part {part}: {config.label}</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {questions.length} question{questions.length > 1 ? "s" : ""} — answer {inputMode === "voice" ? "by speaking" : "by typing"}
-            </p>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1">
-            <ArrowLeft className="h-4 w-4" /> Home
-          </Button>
-        </div>
-
-        {!showResults && (
-          <div className="flex items-center gap-2 justify-center">
-            <Button
-              variant={inputMode === "voice" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setInputMode("voice")}
-              className="rounded-full"
-            >
-              <Mic className="h-4 w-4 mr-1" /> Voice
-            </Button>
-            <Button
-              variant={inputMode === "text" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setInputMode("text")}
-              className="rounded-full"
-            >
-              <Send className="h-4 w-4 mr-1" /> Type
-            </Button>
-          </div>
-        )}
-
-        {!showResults && (
+      {/* Main content */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4 gap-6 overflow-auto">
+        {isPreparing && cueCard ? (
+          <CueCardDisplay cueCard={cueCard} />
+        ) : (
           <>
-            <div className="space-y-4">
-              {questions.map((q, i) => (
-                <QuestionCard
-                  key={i}
-                  question={{ part, question: q }}
-                  index={i}
-                  onAnswered={handleAnswered}
-                  inputMode={inputMode}
-                />
-              ))}
-            </div>
+            <ExaminerAnimation isSpeaking={isExaminerSpeaking} />
 
-            <div className="flex justify-center pt-2">
-              <Button
-                size="lg"
-                onClick={handleSubmit}
-                disabled={!allAnswered || isEvaluating}
-                className="rounded-xl font-bold"
+            {/* Question text */}
+            <div className="flex items-center gap-3 max-w-lg mx-auto animate-fade-in">
+              <p className="text-lg font-medium text-muted-foreground text-center">
+                {questions[currentQ]}
+              </p>
+              <button
+                onClick={handleReplay}
+                className="shrink-0 h-8 w-8 rounded-full border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
               >
-                {isEvaluating ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Evaluating...</>
-                ) : (
-                  <>Submit Part {part}<ChevronRight className="ml-2 h-5 w-5" /></>
-                )}
-              </Button>
-            </div>
-          </>
-        )}
-
-        {showResults && results && (
-          <>
-            <EvaluationCard
-              result={{
-                transcript: "Part evaluation completed",
-                evaluation: results
-              }}
-            />
-            <div className="flex justify-center gap-3 pt-4">
-              {nextPart ? (
-                <Button size="lg" onClick={() => navigate(`/speaking/part/${nextPart}`)} className="rounded-xl font-bold">
-                  Continue to Part {nextPart}
-                  <ChevronRight className="ml-2 h-5 w-5" />
-                </Button>
-              ) : (
-                <Button size="lg" onClick={() => navigate("/results")} className="rounded-xl font-bold">
-                  View Overall Results
-                  <ChevronRight className="ml-2 h-5 w-5" />
-                </Button>
-              )}
-              <Button size="lg" variant="outline" onClick={() => navigate("/")} className="rounded-xl font-bold">
-                Back to Home
-              </Button>
+                <Volume2 className="h-4 w-4" />
+              </button>
             </div>
           </>
         )}
       </main>
+
+      <BottomBar
+        isRecording={isRecording}
+        hasRecorded={hasRecorded}
+        isExaminerSpeaking={isExaminerSpeaking}
+        isPreparing={isPreparing}
+        prepTimeLeft={prepTimeLeft}
+        recordingDuration={recordingDuration}
+        onRecord={handleRecord}
+        onNext={handleNext}
+        onSkipPrep={handleSkipPrep}
+      />
     </div>
   );
-}
+};
 
 const SpeakingPart: React.FC = () => {
   const { partNum } = useParams();
