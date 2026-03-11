@@ -97,15 +97,36 @@ const SpeakingPartInner: React.FC<{ part: 1 | 2 | 3 }> = ({ part }) => {
 
   const playQuestion = useCallback((text: string) => {
     if (!text) return;
-    window.speechSynthesis.cancel();
+
     setIsExaminerSpeaking(true);
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
-    const englishVoice = voices.find(v => v.lang.startsWith('en-GB')) || voices.find(v => v.lang.startsWith('en-US'));
-    if (englishVoice) utterance.voice = englishVoice;
-    utterance.onend = () => setIsExaminerSpeaking(false);
-    utterance.onerror = () => setIsExaminerSpeaking(false);
-    window.speechSynthesis.speak(utterance);
+
+    // Use a small timeout to ensure any previous speech is fully cancelled
+    // and the browser is ready for the next utterance.
+    window.speechSynthesis.cancel();
+
+    setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(text);
+
+      // Voices might take a moment to load
+      const voices = window.speechSynthesis.getVoices();
+      const englishVoice = voices.find(v => v.lang === 'en-GB' || v.lang === 'en-US')
+        || voices.find(v => v.lang.startsWith('en'));
+
+      if (englishVoice) utterance.voice = englishVoice;
+      utterance.rate = 0.95;
+      utterance.pitch = 1;
+
+      utterance.onend = () => {
+        setIsExaminerSpeaking(false);
+      };
+
+      utterance.onerror = (event) => {
+        console.error("SpeechSynthesis error:", event);
+        setIsExaminerSpeaking(false);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }, 50);
   }, []);
 
   // Play TTS when question changes and not preparing
